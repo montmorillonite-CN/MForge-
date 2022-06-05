@@ -864,8 +864,6 @@ def save(Path=''):
                         dic = get_dic(j)
                         dic['type'] = 'item'
                         lst.append(dic)
-                print(lst)
-                print(dump(lst))
                 file.write(f'data:extend({dump(lst)})\n')
 
 
