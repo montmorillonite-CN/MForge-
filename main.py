@@ -7,28 +7,82 @@ import os
 
 # config
 flag = 0
-MForgeVersion = '0.0.0'
+MForgeVersion = '0.0.1'
 shortcuts = {
     'info': {
-        'name': ['untitled', ''],
-        'version': ['0.0.1', ''],
-        'title': ['untitled', ''],
-        'author': [getpass.getuser(), ''],
-        'factorio_version': ['1.1', ''],
+        'name': 'untitled',
+        'title': 'untitled',
+        'version': '0.0.1',
+        'author': getpass.getuser(),
+        'factorio_version': '1.1',
         'dependencies': {
-            'base': ['>=1.1.0', '']
+            'base': '>=1.1.0'
         },
-        'description': ['Well, this mod is not described yet.', '']
+        'description': ''
     },
     'data': {
-        'require': ['file', '']
+        'require-1': 'prototypes/item',
+        'require-2': 'prototypes/fluid',
+        'require-3': 'prototypes/recipe',
+        'require-4': 'prototypes/entity',
+        'require-5': 'prototypes/technology'
     },
     'file': {
-        'name': ['prototypes\\file', ''],
+        'name': 'prototypes/file',
     },
     'item': {
-        'name': ['name', ''],
-        'stack_size': ['100', '']
+        'type': 'item',
+        'name': '',
+        'icon': '',
+        'icon_size': 64,
+        'icon_mipmaps': 4,
+        'subgroup': '',
+        'order': '',
+        'stack_size': 100
+    },
+    'fluid': {
+        'type': 'fluid',
+        'name': '',
+        'default_temperature': 25,
+        'heat_capacity': '1KJ',
+        'base_color': {
+            'r': 0.5,
+            'g': 0.5,
+            'b': 0.5
+        },
+        'flow_color': {
+            'r': 0.5,
+            'g': 0.5,
+            'b': 0.5
+        },
+        'icon': '',
+        'icon_size': 64,
+        'icon_mipmaps': 4,
+        'order': '',
+    },
+    'recipe': {
+        'type': 'recipe',
+        'name': '',
+        'enabled': False,
+        'ingredients': {
+            'ingredient-1': {
+                'type': 'item',
+                'name': '',
+                'amount': 1
+            },
+            'ingredient-2': {
+                'type': 'item',
+                'name': '',
+                'amount': 1
+            },
+            'ingredient-3': {
+                'type': 'item',
+                'name': '',
+                'amount': 1
+            }
+        },
+        'energy_required': 1,
+        'result': ''
     }
 }
 LICENSE = '''                    GNU GENERAL PUBLIC LICENSE
@@ -728,7 +782,7 @@ def textinput(title=None, prompt=None):
     width, height = 166, 103
     textInput = tkinter.Tk()
     textInput.resizable(False, False)
-    textInput.title(f'MForge {MForgeVersion} by 一块蒙脱石')
+    textInput.title(f'MForge {MForgeVersion} by montmorillonite')
     textInput.geometry(f'+{min(max(0, pyautogui.position().x - dx), main.winfo_screenwidth() - width)}'
                        f'+{min(max(0, pyautogui.position().y - dy), main.winfo_screenheight() - height)}')
     if title is not None:
@@ -739,8 +793,8 @@ def textinput(title=None, prompt=None):
         tkinter.Label(fme, text=prompt).pack(anchor='w')
     ety = tkinter.Entry(fme)
     ety.pack()
-    tkinter.Button(fme, text='取消', command=textInput.destroy).pack(side='left')
-    tkinter.Button(fme, text='确定', command=ok).pack(side='right')
+    tkinter.Button(fme, text='Cancel', command=textInput.destroy).pack(side='left')
+    tkinter.Button(fme, text='OK', command=ok).pack(side='right')
     textInput.bind('<Destroy>', lambda events: cancel())
     textInput.bind('<Return>', lambda events: ok())
     textInput.update()
@@ -788,31 +842,28 @@ def tree_all(path='', deep=0):
     return string
 
 
-def add_item(name, Root=None, dic=None):
-    if dic is None:
-        dic = shortcuts[name]
-    if Root is None:
-        Root = tree.focus()
-    node = tree.insert(Root, tkinter.END, text=name, open=True)
-    for i in dic:
-        if type(dic[i]) is dict:
-            add_item(i, node, dic[i])
+def add_item(obj, ROOT, key='', ):
+    NODE = tree.insert(ROOT, tkinter.END, text=key, open=True)
+    for i in obj:
+        if isinstance(obj[i], (tuple, list, dict)):
+            add_item(obj[i], NODE, i)
         else:
-            tree.insert(node, tkinter.END, text=i, values=dic[i], open=True)
+            tree.insert(NODE, tkinter.END, text=i, values=[obj[i], ''], open=True)
 
 
 def add_shortcut(key):
-    add.add_command(label=key, command=lambda: add_item(key))
+    add.add_command(label=key, command=lambda: add_item(shortcuts[key], tree.focus(), key))
 
 
 def dump(obj, deep=0, key=True):
     s = deep * '  ' if key else ''
-    if type(obj) is bool:
-        s += 'true' if obj else 'false'
-    elif isinstance(obj, (int, float)):
+    if isinstance(obj, (int, float)):
         s += str(obj)
     elif type(obj) is str:
-        s += f'"{obj}"'
+        if obj.lower() == 'true' or obj.lower() == 'false':
+            s += obj.lower()
+        else:
+            s += f'"{obj}"'
     elif isinstance(obj, (tuple, list)):
         s += '{'
         for i in range(len(obj)):
@@ -827,7 +878,7 @@ def dump(obj, deep=0, key=True):
             n += 1
             deep += 1
             s += '\n' + deep * '  '
-            if i != '':
+            if '-' not in i:
                 s += i + ' = '
             s += dump(obj[i], deep, False)
             if n != len(obj.keys()):
@@ -853,17 +904,15 @@ def save(Path=''):
         elif tree.item(i)['text'] == 'data':
             with open(os.path.join(Path, 'data.lua'), 'w') as file:
                 for j in tree.get_children(i):
-                    if tree.item(j)['text'] == 'require':
+                    if 'require' in tree.item(j)['text']:
                         file.write(f"require('{tree.item(j)['values'][0]}')")
         elif tree.item(i)['text'] == 'file':
             mkdir(os.path.dirname(os.path.join(Path, get_dic(i)['name'])))
             with open(os.path.join(Path, get_dic(i)['name'] + '.lua'), 'w') as file:
                 lst = []
                 for j in tree.get_children(i):
-                    if tree.item(j)['text'] == 'item':
-                        dic = get_dic(j)
-                        dic['type'] = 'item'
-                        lst.append(dic)
+                    if tree.item(j)['text'] in shortcuts:
+                        lst.append(get_dic(j))
                 file.write(f'data:extend({dump(lst)})\n')
 
 
@@ -918,42 +967,44 @@ if __name__ == '__main__':
     # main
     main = tkinter.Tk()
     main.geometry('640x480')
-    main.title(f'MForge {MForgeVersion} by 一块蒙脱石')
+    main.title(f'MForge {MForgeVersion} by montmorillonite')
     main.iconphoto(True, tkinter.PhotoImage(file='MForge.ico'))
 
     # list
     tree = tkinter.ttk.Treeview(main)
     tree.config(show='tree headings', columns=('value', 'note'), height=128)
-    tree.heading('#0', text='键', anchor='w')
-    tree.heading('#1', text='值', anchor='w')
-    tree.heading('#2', text='备注', anchor='w')
+    tree.heading('#0', text='key', anchor='w')
+    tree.heading('#1', text='value', anchor='w')
+    tree.heading('#2', text='note', anchor='w')
     tree.pack(padx=10, pady=10, fill='both')
 
     # menu
     menu = tkinter.Menu(main)
-    menu.add_command(label='保存', command=save)
-    menu.add_command(label='查询', command=lambda: print(find(textinput())))
-    menu.add_command(label='测试', command=test)
+    menu.add_command(label='save', command=save)
+    menu.add_command(label='find', command=lambda: print(find(textinput())))
+    menu.add_command(label='test', command=test)
     main.config(menu=menu)
 
     # pop menu
     pop = tkinter.Menu(main)
     add = tkinter.Menu(pop)
-    pop.add_command(label='添加', command=lambda: tree.insert(tree.focus(), tkinter.END, text=textinput(), open=True))
-    pop.add_cascade(label='添加...', menu=add)
+    pop.add_command(label='add', command=lambda: tree.insert(tree.focus(), tkinter.END, text=textinput(), open=True))
+    pop.add_cascade(label='add...', menu=add)
     add_shortcut('info')
     add_shortcut('data')
     add_shortcut('file')
     add.add_separator()
     add_shortcut('item')
-    pop.add_command(label='删除', command=lambda: tree.delete(tree.focus()))
+    add_shortcut('fluid')
+    add_shortcut('recipe')
+    pop.add_command(label='delete', command=lambda: tree.delete(tree.focus()))
     tree.bind('<Double-1>', lambda events: tree.set(tree.focus(), 'value', textinput()))
     tree.bind('<Button-3>', lambda events: pop.post(pyautogui.position().x, pyautogui.position().y))
 
     # init
     root = tree.insert('', tkinter.END, text='root', open=True)
-    add_item('info', root)
-    add_item('data', root)
-    add_item('file', root)
+    add_item(shortcuts['info'], root, 'info')
+    add_item(shortcuts['data'], root, 'data')
+    add_item(shortcuts['file'], root, 'file')
 
     main.mainloop()
