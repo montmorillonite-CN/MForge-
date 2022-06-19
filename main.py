@@ -1,13 +1,14 @@
 import tkinter.filedialog
+import tkinter.messagebox
 import tkinter.ttk
-import pyautogui
+import mouseinfo
 import getpass
 import json
 import os
 
 # config
 flag = 0
-MForgeVersion = '0.0.1'
+MForgeTitle = f'MForge 0.0.1 by montmorillonite'
 shortcuts = {
     'info': {
         'name': 'untitled',
@@ -23,13 +24,12 @@ shortcuts = {
     'data': {
         'require-1': 'prototypes/item',
         'require-2': 'prototypes/fluid',
-        'require-3': 'prototypes/recipe',
-        'require-4': 'prototypes/entity',
-        'require-5': 'prototypes/technology'
+        'require-3': 'prototypes/recipe'
     },
     'file': {
-        'name': 'prototypes/file',
+        'path': 'prototypes/file',
     },
+
     'item': {
         'type': 'item',
         'name': '',
@@ -778,13 +778,11 @@ def textinput(title=None, prompt=None):
 
     global flag
     flag = 0
-    dx, dy = 140, 50
-    width, height = 166, 103
+    dx, dy = -50, -51
     textInput = tkinter.Tk()
     textInput.resizable(False, False)
-    textInput.title(f'MForge {MForgeVersion} by montmorillonite')
-    textInput.geometry(f'+{min(max(0, pyautogui.position().x - dx), main.winfo_screenwidth() - width)}'
-                       f'+{min(max(0, pyautogui.position().y - dy), main.winfo_screenheight() - height)}')
+    textInput.title(MForgeTitle)
+    textInput.geometry(f'+{mouseinfo.position()[0] + dx}+{mouseinfo.position()[1] + dy}')
     if title is not None:
         textInput.title(title)
     fme = tkinter.Frame(textInput)
@@ -801,32 +799,16 @@ def textinput(title=None, prompt=None):
     while True:
         textInput.update()
         if flag == 1:
-            text = ety.get()
+            s = ety.get()
             textInput.destroy()
-            return text
+            return s
         elif flag == -1:
             return None
 
 
-def get_dic(item=None):
-    dic = {}
-    lst = []
-    for i in tree.get_children(item):
-        if tree.get_children(i) == ():
-            dic[tree.item(i)['text']] = tree.item(i)['values'][0]
-        else:
-            if tree.item(i)['text'] == 'dependencies':
-                for j in tree.get_children(i):
-                    lst.append(tree.item(j)['text'] + tree.item(j)['values'][0])
-                dic[tree.item(i)['text']] = lst
-            else:
-                dic[tree.item(i)['text']] = get_dic(i)
-    return dic
-
-
 def find(findPath, path='', MPath=''):
     for i in tree.get_children(path):
-        Path = MPath + '.' + tree.item(i)['text']
+        Path = MPath + '.' + text(i)
         if findPath in Path:
             return i
         else:
@@ -835,24 +817,45 @@ def find(findPath, path='', MPath=''):
                 return j
 
 
-def tree_all(path='', deep=0):
-    string = ''
-    for i in tree.get_children(path):
-        string = string + deep * '    ' + str(tree.item(i)) + '\n' + tree_all(i, deep + 1)
-    return string
+def text(item):
+    return tree.item(item if 'I' in item else find(item))['text']
 
 
-def add_item(obj, ROOT, key='', ):
-    NODE = tree.insert(ROOT, tkinter.END, text=key, open=True)
-    for i in obj:
-        if isinstance(obj[i], (tuple, list, dict)):
-            add_item(obj[i], NODE, i)
+def value(item):
+    return tree.item(item if 'I' in item else find(item))['values'][0]
+
+
+def children(item=''):
+    dic = {}
+    lst = []
+    for i in tree.get_children(item):
+        if tree.get_children(i) == ():
+            dic[text(i)] = value(i)
         else:
-            tree.insert(NODE, tkinter.END, text=i, values=[obj[i], ''], open=True)
+            if text(i) == 'dependencies':
+                for j in tree.get_children(i):
+                    lst.append(text(j) + value(j))
+                dic[text(i)] = lst
+            else:
+                dic[text(i)] = children(i)
+    return dic
 
 
-def add_shortcut(key):
-    add.add_command(label=key, command=lambda: add_item(shortcuts[key], tree.focus(), key))
+def add2tree(key, parent=None, obj=None):
+    if parent is None:
+        parent = tree.focus()
+    if obj is None:
+        obj = shortcuts[key]
+    self = tree.insert(parent, tkinter.END, text=key, open=True)
+    for i in obj:
+        if type(obj[i]) is dict:
+            add2tree(i, self, obj[i])
+        else:
+            tree.insert(self, tkinter.END, text=i, values=[obj[i], ''], open=True)
+
+
+def shortcut(key):
+    add.add_command(label=key, command=lambda: add2tree(key))
 
 
 def dump(obj, deep=0, key=True):
@@ -888,91 +891,49 @@ def dump(obj, deep=0, key=True):
     return s
 
 
-def save(Path=''):
-    if Path == '':
-        Path = tkinter.filedialog.askdirectory(initialdir=os.getcwd()) + '\\' + tree.item(find('info.name'))['values'][
-            0] + '_' + tree.item(find('info.version'))['values'][0]
-    mkdir(Path)
-    with open(os.path.join(Path, 'main.mff'), 'w', encoding='utf-8') as file:
-        file.write(tree_all())
-    with open(os.path.join(Path, 'LICENSE'), 'w', encoding='utf-8') as file:
-        file.write(LICENSE)
+def save(path=None):
+    if path is None:
+        path = tkinter.filedialog.askdirectory(initialdir=os.getcwd())
+        if path == '':
+            return
+        path = os.path.join(path, f"{value('info.name')}_{value('info.version')}")
+    mkdir(path)
+    with open(os.path.join(path, 'LICENSE'), 'w', encoding='utf-8') as f:
+        f.write(LICENSE)
     for i in tree.get_children(find('root')):
-        if tree.item(i)['text'] == 'info':
-            with open(os.path.join(Path, 'info.json'), 'w', encoding='utf-8') as file:
-                file.write(json.dumps(get_dic(find('info')), ensure_ascii=False, indent='    '))
+        if text(i) == 'info':
+            with open(os.path.join(path, 'info.json'), 'w', encoding='utf-8') as f:
+                f.write(json.dumps(children(find('root.info')), ensure_ascii=False, indent='    '))
         elif tree.item(i)['text'] == 'data':
-            with open(os.path.join(Path, 'data.lua'), 'w') as file:
+            with open(os.path.join(path, 'data.lua'), 'w') as f:
                 for j in tree.get_children(i):
                     if 'require' in tree.item(j)['text']:
-                        file.write(f"require('{tree.item(j)['values'][0]}')")
-        elif tree.item(i)['text'] == 'file':
-            mkdir(os.path.dirname(os.path.join(Path, get_dic(i)['name'])))
-            with open(os.path.join(Path, get_dic(i)['name'] + '.lua'), 'w') as file:
+                        f.write(f"require('{tree.item(j)['values'][0]}')\n")
                 lst = []
                 for j in tree.get_children(i):
                     if tree.item(j)['text'] in shortcuts:
-                        lst.append(get_dic(j))
-                file.write(f'data:extend({dump(lst)})\n')
-
-
-def test():
-    lst = [
-        {
-            'int': 0,
-            'float': 0.0,
-            'bool': False,
-            'str': '',
-            'array': [],
-            'dict': {}
-        },
-        {
-            'int': 1,
-            'float': 0.1,
-            'bool': False,
-            'str': 'a',
-            'array': [11],
-            'dict': {
-                'hp': 10
-            }
-        },
-        {
-            'int': 2,
-            'float': 1.1,
-            'bool': True,
-            'str': 'bb',
-            'array': [11, 22],
-            'dict': {
-                'hp': 10,
-                'mp': 20
-            }
-        },
-        {
-            'int': 3,
-            'float': 2.1,
-            'bool': False,
-            'str': 'ccc',
-            'array': [11, 22, 33],
-            'dict': {
-                'hp': 10,
-                'mp': 20,
-                'atk': 30
-            }
-        }
-    ]
-    print(dump(lst))
+                        lst.append(children(j))
+                f.write(f'data:extend({dump(lst)})\n')
+        elif tree.item(i)['text'] == 'file':
+            mkdir(os.path.dirname(os.path.join(path, children(i)['path'])))
+            with open(os.path.join(path, children(i)['path'] + '.lua'), 'w') as f:
+                lst = []
+                for j in tree.get_children(i):
+                    if tree.item(j)['text'] in shortcuts:
+                        lst.append(children(j))
+                f.write(f'data:extend({dump(lst)})\n')
+    if tkinter.messagebox.askyesno('Save project successfully!', f'Open project "{value("info.name")}" in Explorer?'):
+        os.startfile(path)
 
 
 if __name__ == '__main__':
     # main
     main = tkinter.Tk()
     main.geometry('640x480')
-    main.title(f'MForge {MForgeVersion} by montmorillonite')
-    main.iconphoto(True, tkinter.PhotoImage(file='MForge.ico'))
+    main.title(MForgeTitle)
 
-    # list
-    tree = tkinter.ttk.Treeview(main)
-    tree.config(show='tree headings', columns=('value', 'note'), height=128)
+    # tree
+    tree = tkinter.ttk.Treeview(main, show='tree headings', columns=('value', 'note'), height=128, selectmode='browse')
     tree.heading('#0', text='key', anchor='w')
     tree.heading('#1', text='value', anchor='w')
     tree.heading('#2', text='note', anchor='w')
@@ -980,31 +941,35 @@ if __name__ == '__main__':
 
     # menu
     menu = tkinter.Menu(main)
-    menu.add_command(label='save', command=save)
-    menu.add_command(label='find', command=lambda: print(find(textinput())))
-    menu.add_command(label='test', command=test)
+    file = tkinter.Menu(menu, tearoff=False)
+    file.add_command(label='open', command=open)
+    file.add_command(label='save', command=save)
+    edit = tkinter.Menu(menu, tearoff=False)
+    edit.add_command(label='exit', command=main.quit)
+    menu.add_cascade(label='file', menu=file)
+    menu.add_cascade(label='edit', menu=edit)
     main.config(menu=menu)
 
-    # pop menu
+    # pop
     pop = tkinter.Menu(main)
     add = tkinter.Menu(pop)
     pop.add_command(label='add', command=lambda: tree.insert(tree.focus(), tkinter.END, text=textinput(), open=True))
     pop.add_cascade(label='add...', menu=add)
-    add_shortcut('info')
-    add_shortcut('data')
-    add_shortcut('file')
+    shortcut('info')
+    shortcut('data')
+    shortcut('file')
     add.add_separator()
-    add_shortcut('item')
-    add_shortcut('fluid')
-    add_shortcut('recipe')
+    shortcut('item')
+    shortcut('fluid')
+    shortcut('recipe')
     pop.add_command(label='delete', command=lambda: tree.delete(tree.focus()))
     tree.bind('<Double-1>', lambda events: tree.set(tree.focus(), 'value', textinput()))
-    tree.bind('<Button-3>', lambda events: pop.post(pyautogui.position().x, pyautogui.position().y))
+    tree.bind('<Button-3>', lambda events: pop.post(tree.winfo_rootx() + events.x, tree.winfo_rooty() + events.y))
 
     # init
-    root = tree.insert('', tkinter.END, text='root', open=True)
-    add_item(shortcuts['info'], root, 'info')
-    add_item(shortcuts['data'], root, 'data')
-    add_item(shortcuts['file'], root, 'file')
+    ROOT = tree.insert('', tkinter.END, text='root', open=True)
+    add2tree('info', find('root'))
+    add2tree('data', find('root'))
+    add2tree('file', find('root'))
 
     main.mainloop()
