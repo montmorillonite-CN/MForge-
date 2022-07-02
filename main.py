@@ -19,6 +19,7 @@ def show(path):
     global img
     image = Image.open(path)
     img = ImageTk.PhotoImage(image)
+    canvas.update()
     canvas.create_image(canvas.winfo_width()/2, canvas.winfo_height()/2, image=img)
 
 
