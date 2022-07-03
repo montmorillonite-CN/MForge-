@@ -1,9 +1,11 @@
 import os
 import tkinter as tk
 import tkinter.ttk as ttk
+from tkinter import filedialog, messagebox
 from PIL import Image, ImageTk
 
 img = None
+
 
 def load(Path, parent=''):
     item = tree.insert(parent, tk.END, text=os.path.basename(Path), values=[Path], open=True)
@@ -20,7 +22,7 @@ def show(path):
     image = Image.open(path)
     img = ImageTk.PhotoImage(image)
     canvas.update()
-    canvas.create_image(canvas.winfo_width()/2, canvas.winfo_height()/2, image=img)
+    canvas.create_image(canvas.winfo_width() / 2, canvas.winfo_height() / 2, image=img)
 
 
 if __name__ == '__main__':
@@ -38,6 +40,11 @@ if __name__ == '__main__':
     bar2 = tk.Scrollbar(fme2)
     canvas = tk.Canvas(fme, width=114514, height=1919810)
     menu = tk.Menu()
+    menu.add_command(label='test', command=lambda: [
+        tree.config(columns='path', show='tree headings'),
+        tree.heading('#0', text='tree'),
+        tree.heading('#1', text='path')
+    ])
 
     bar1.config(command=tree.yview)
     bar2.config(command=text.yview)
@@ -56,24 +63,27 @@ if __name__ == '__main__':
     buff.bind('<B1-Motion>', lambda events: [
         tree.pack_forget(),
         tree.column('#0', width=tree.winfo_width() + events.x),
-        tree.pack(side='left', fill='both')
+        tree.pack(side='left', fill='both'),
     ])
-    tree.bind('<ButtonRelease-1>', lambda x: [
+    tree.bind('<ButtonRelease-1>', lambda events: [
         [
             fme2.pack_forget(),
             canvas.pack(side='left', fill='both'),
             show(tree.item(tree.focus())['values'][0])
-        ] if tree.item(tree.focus())['values'][0].endswith('.png') else [
+        ] if tree.item(tree.focus())['values'][0].endswith('.png') or
+             tree.item(tree.focus())['values'][0].endswith('.jpg') else [
             canvas.pack_forget(),
-            fme2.pack(side='left', fill='both'),
             text.delete('1.0', tk.END),
-            text.insert('1.0', open(tree.item(tree.focus())['values'][0], 'br').read())
+            fme2.pack_forget() if os.path.isdir(tree.item(tree.focus())['values'][0]) else [
+                fme2.pack(side='left', fill='both'),
+                text.insert('1.0', open(tree.item(tree.focus())['values'][0], encoding='utf-8').read())
+            ]
         ]
     ])
-    load('E:\\factorio\\mods')
+    text.bind('<Control-s>', lambda events: [
+        open(tree.item(tree.focus())['values'][0], 'w').write(text.get('0.0', tk.END)),
+        messagebox.showinfo('MForge-Alpha', 'Save successfully!')
+    ])
+    canvas.bind('<Configure>', lambda events: show(tree.item(tree.focus())['values'][0]))
+    load(filedialog.askdirectory())
     main.mainloop()
-
-'''
-text.delete('1.0', tk.END),
-        text.insert('1.0', open(tree.item(tree.focus())['values'][0], 'br').read())
-'''
